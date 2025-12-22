@@ -1,5 +1,5 @@
 from django.views.generic import (
-    CreateView, UpdateView, DeleteView, DetailView, ListView
+    CreateView, UpdateView, DeleteView, DetailView,
 )
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404, redirect
@@ -13,6 +13,7 @@ from .forms import PostForm, CommentForm, UserUpdateForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404
 from django.utils import timezone
+from blog.forms import PostForm
 
 # Create your views here.
 
@@ -57,6 +58,12 @@ class PostUpdateView(UpdateView):
 class PostDeleteView(LoginRequiredMixin, DeleteView):
     model = Post
     success_url = reverse_lazy('blog:index')
+    template_name = 'blog/create.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['form'] = PostForm(instance=self.object)
+        return context
     
     def get(self, request, *args, **kwargs):
         self.object = self.get_object()
@@ -123,7 +130,7 @@ def profile_view(request, username):
             author=profile,
             is_published=True,
             category__is_published=True,
-            pub_date__lte=datetime.now()
+            pub_date__lte=timezone.now()
         ).order_by('-pub_date')
         
     for post in user_posts:
@@ -148,7 +155,7 @@ def index(request):
     post_list = Post.objects.filter(
         is_published=True,
         category__is_published=True,
-        pub_date__lte=datetime.now()
+        pub_date__lte=timezone.now()
     ).select_related(
         'category', 'author', 'location'
     ).order_by(
@@ -182,7 +189,7 @@ def category_posts(request, category_slug):
     post_list = Post.objects.filter(
         category=category,
         is_published=True,
-        pub_date__lte=datetime.now()
+        pub_date__lte=timezone.now()
     ).select_related(
         'author', 'location'
     ).order_by(
