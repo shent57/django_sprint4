@@ -1,7 +1,8 @@
-# blog/forms.py
 from django import forms
 from django.core.mail import send_mail
 from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import UserCreationForm  # Добавьте этот импорт!
+from django.core.exceptions import ValidationError
 
 from .models import Post, Comment, Category, Location
 
@@ -9,6 +10,38 @@ from .models import Post, Comment, Category, Location
 User = get_user_model()
 
 BEATLES = {'Джон Леннон', 'Пол Маккартни', 'Джордж Харрисон', 'Ринго Старр'}
+
+
+class UserCreationFormCustom(UserCreationForm):
+    
+    email = forms.EmailField(
+        label='Email',
+        max_length=254,
+        required=True,
+        help_text='Обязательное поле. Введите действующий email.'
+    )
+    
+    class Meta(UserCreationForm.Meta):
+        model = User
+        fields = ('username', 'email', 'password1', 'password2')
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['email'].required = True
+    
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if User.objects.filter(email=email).exists():
+            raise ValidationError('Пользователь с таким email уже существует.')
+        return email
+    
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.email = self.cleaned_data['email']
+        if commit:
+            user.save()
+        return user
+
 
 class PostForm(forms.ModelForm):
     class Meta:
@@ -44,6 +77,7 @@ class PostForm(forms.ModelForm):
             del cleaned_data['author']
         return cleaned_data
             
+
 class CommentForm(forms.ModelForm):
     
     class Meta:
@@ -56,6 +90,7 @@ class CommentForm(forms.ModelForm):
             'text': 'Коментарий',
         }
         
+
 class UserUpdateForm(forms.ModelForm):
     class Meta:
         model = User

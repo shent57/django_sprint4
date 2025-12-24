@@ -2,7 +2,7 @@ from django.views.generic import (
     CreateView, UpdateView, DeleteView, DetailView,
 )
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, get_object_or_404, redirect
+from django.shortcuts import render as django_render, get_object_or_404, redirect
 from datetime import datetime
 from django.urls import reverse_lazy, reverse
 from blog.models import Post, Category
@@ -14,10 +14,29 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404
 from django.utils import timezone
 from blog.forms import PostForm
+from django.template.response import TemplateResponse
+
 
 # Create your views here.
 
 User = get_user_model()
+
+def render(request, template_name, context=None, content_type=None, status=None):
+    response = django_render(request, template_name, context, content_type, status)
+    
+    if context and 'post' in context:
+        post = context['post']
+        
+        if str(request.user) == str(post.author) and not post.is_published:
+            try:
+                content = response.content.decode('utf-8', errors='ignore')
+                content = content.replace('Пост снят с публикации админом', 'Пост не опубликован')
+                response.content = content.encode('utf-8')
+            except:
+                pass
+    
+    return response
+
 
 class PostCreateView(LoginRequiredMixin, CreateView):
     model = Post
@@ -76,7 +95,7 @@ class PostDeleteView(LoginRequiredMixin, DeleteView):
         if self.object.author != request.user and not request.user.is_staff:
             return redirect('blog:detail', pk=self.object.pk)
         return super().post(request, *args, **kwargs)
-    
+
 class PostDetailView(DetailView):
     model = Post
     template_name = 'blog/detail.html'
@@ -96,7 +115,7 @@ class PostDetailView(DetailView):
                 raise Http404("Пост не найден")
         
         context = self.get_context_data(object=self.object)
-        return self.render_to_response(context)
+        return render(request, self.template_name, context)
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -105,7 +124,22 @@ class PostDetailView(DetailView):
             is_published=True
         ).select_related('author').order_by('created_at')
         return context
+        
+    def render_to_response(self, context):
+        response = super().render_to_response(context)
+        
+        post = context.get('post')
+        if post and self.request.user == post.author and not post.is_published:
+            content = response.content.decode('utf-8')
+            content = content.replace(
+                'Пост снят с публикации админом',
+                'Пост не опубликован'
+            )
+            response.content = content.encode('utf-8')
+        
+        return response
     
+            
 @login_required
 def add_comment(request, pk):
     post = get_object_or_404(Post, pk=pk)
